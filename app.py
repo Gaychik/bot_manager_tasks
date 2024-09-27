@@ -1,7 +1,8 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackContext
 import requests
 BOT_TOKEN='6429416800:AAGmnFMhkbD8XagsGCgIROmbM2wgwo7ApFE'
+SELECTED_EMPLOYES,ASSIGN=range(2)
 
 # Функция для обработки команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -12,16 +13,46 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "last_name": user.last_name,
         "username": user.username
     }
-    response = requests.post("", json=user_data)
-    if response.status_code == 201:  # 201 Created
-        update.message.reply_text("Вы успешно зарегистрированы!")
-    elif response.status_code == 409:  # Conflict - пользователь уже существует
-        update.message.reply_text("Вы уже зарегистрированы!")
+    response = requests.post("http://127.0.0.1:8000/users", json=user_data)
+    res= response.json()
+    if res['role']=='admin':
+        keyboard = [
+            ['Назначить задачу - /assign']
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        await update.message.reply_text("Что будем делать?", reply_markup=reply_markup)
     else:
-        update.message.reply_text("Произошла ошибка, попробуйте позже.")
-    await update.message.reply_text('Привет! Ты мой бот. Как помогать мне будешь?')
+        keyboard = [
+            ['Получить список задач']
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        await update.message.reply_text("Выбери действие", reply_markup=reply_markup)
 
-# Функция для обработки текстовых сообщений
+
+async def handle_btn_clk_assign_task(update: Update, context: CallbackContext):
+    response = requests.get("http://127.0.0.1:8000/users")
+    users=[user for user in response.json() if user['role']!='admin']
+    selected_users=""
+    for j in range(len(users)):
+        selected_users+=f"id = {j+1} Имя = {users[j]['name']} Телефон = {users[j]['phone']}\n"
+    await update.message.reply_text(selected_users)
+    await update.message.reply_text("Выберите сотрудника для назначения задачи.\n"
+                                    "Если хотите выбрать нескольких сотрудников, введите их ID через запятую!")
+    await update.message.reply_text("Если хотите назначить всем задачу введите команду /all")
+    return SELECTED_EMPLOYES
+
+async def assign_task(update:Update,context:ContextTypes.DEFAULT_TYPE):
+    print(context)
+    selected_users_id=update.message.text.split(',')
+    context.user_data['selected_users']=selected_users_id
+    await update.message.reply_text("Напишите задачу: ")
+    return ASSIGN
+
+async def send_tasks_by_users(update:Update,context:ContextTypes.DEFAULT_TYPE):
+    ...
+
+
+
 async def handler_msg(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(update.message.text)
 
